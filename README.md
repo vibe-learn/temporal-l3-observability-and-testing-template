@@ -1,2 +1,67 @@
-# temporal-l3-observability-and-testing-template
-Homework template for Vibe Learn lesson l3_observability_and_testing
+        # temporal — Observability и тестирование
+
+        Homework-шаблон для урока **l3_observability_and_testing** (Observability и тестирование) на платформе Vibe Learn.
+
+        ## Что делать
+
+        Дан PayoutWorkflow на Go SDK (go.temporal.io/sdk) с активностями и компенсацией. Шаг 1:
+добавь replay-aware логирование через workflow.GetLogger и экспорт SDK-метрик в Prometheus
+(заготовка в шаблоне). Шаг 2: напиши юнит-тесты через TestWorkflowEnvironment: happy-path
+(все активности успешны), ветка компенсации (OnActivity(...).Return(err) на одном шаге →
+проверить вызов компенсации), и тест долгого таймера через time-skipping. Шаг 3: добавь
+replay-тест (NewWorkflowReplayer) на приложенной реальной истории и убедись, что
+несовместимое изменение workflow-кода его роняет. Тесты проверят все сценарии.
+
+## Контекст (из transfer-задачи урока)
+
+На проде workflow обработки выплат иногда «застревает»: клиент жалуется, что выплата не
+дошла, хотя процесс «вроде запущен». Раньше (на самодельной стейт-машине) команда часами
+копалась в логах. Теперь сервис на Temporal. Параллельно команда хочет внести изменение в
+PayoutWorkflow и боится повторить инцидент «non-determinism положил in-flight».
+
+**Вопрос:** опиши, как Temporal-инструменты решают обе задачи:
+(a) как за минуты понять, на каком шаге и почему застряла конкретная выплата;
+(b) как написать юнит-тест PayoutWorkflow, включая ветку «активность упала → компенсация»,
+    не поднимая реальный сервер и не ожидая реальных таймеров;
+(c) как застраховаться от non-determinism при изменении кода ДО деплоя.
+
+## Recap из урока
+
+- **Web UI** показывает полную **event history** любого workflow: шаги, ретраи, pending-активности, стек-трейсы. Дебаг становится «машиной времени» — видно весь путь процесса, а не только статус.
+- В workflow логируй через **workflow.GetLogger** (replay-aware, не дублирует логи при проигрывании). Обычный логгер в workflow → лог-спам на каждом replay. В активностях можно обычным.
+- Метрики: **SDK-метрики** (schedule-to-start, activity latency — здоровье приложения) + **server-метрики** (здоровье кластера). SDK-метрики — твой главный дашборд.
+- **TestWorkflowEnvironment** — in-memory тесты с **time-skipping** (таймеры на дни проходят мгновенно) и **mock активностей** (OnActivity().Return()). Проверяет ОРКЕСТРАЦИЮ, не реальные активности.
+- **Replay-тест** проигрывает реальную историю против нового кода → ловит non-determinism в CI ДО деплоя. Главное правило курса: детерминированные workflow + идемпотентные активности.
+
+        ## Как работать
+
+        1. Платформа Vibe Learn создаёт копию этого репо в твоём GitHub-аккаунте по клику «Начать домашку» на странице урока (через GitHub `/generate`, codecrafters-pattern).
+        2. Склонируй копию локально, реализуй TODO в `main.go` (workflow + активности), прогони тесты, запушь.
+        3. CI (`.github/workflows/ci.yml`) запускает `go vet` + `go test ./...` на каждый push. Платформа слушает результат через webhook от GitHub Actions и обновляет статус домашки на странице урока.
+
+        ## Локальное окружение
+
+        - Go 1.22+
+        - SDK: `go.temporal.io/sdk`
+        - Docker + docker-compose — `docker compose up` поднимает Temporal dev server на `:7233` + Web UI на `:8233`. Адрес переопределяется через env `TEMPORAL_ADDRESS` (дефолт `localhost:7233`).
+        - Юнит-тесты на `testsuite.TestWorkflowEnvironment` (активности замоканы) бегут в CI БЕЗ сервера; интеграционный тест включается через `TEMPORAL_INTEGRATION=1`.
+
+        ## Запуск
+
+        ```bash
+        # Поднять локальный Temporal dev server + UI
+        docker compose up -d
+        # Web UI: http://localhost:8233
+
+        # Прогнать тесты (юнит на TestWorkflowEnvironment — без сервера;
+        # интеграционный включается через TEMPORAL_INTEGRATION=1)
+        go test ./...
+        TEMPORAL_INTEGRATION=1 go test ./...
+
+        # Запустить воркер (регистрирует workflow + активности, слушает task queue)
+        go run .
+        ```
+
+        ## Заметка автора
+
+        Это baseline-шаблон, сгенерированный платформой. Бизнес-сущность задачи (что конкретно реализовать в `main.go`, какие тесты сделать строгими) расширяется по ходу итераций — параллельно с углублением теории урока.
